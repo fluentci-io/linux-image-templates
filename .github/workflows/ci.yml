@@ -7,35 +7,33 @@ on:
       - main
 jobs:
   tasks:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - name: Setup Fluent CI
         uses: fluentci-io/setup-fluentci@v5
         with:
           wasm: true
-          plugin: packer
-          args: |
-            setup
       - name: export VM_ID
         run: |
           fluentci run --wasm rust setup
           cargo install moniker-rs
           export VM_ID=`[ $(( RANDOM % 2  )) -eq 0 ] && moniker-cli moby || moniker-cli animal`
           echo "VM_ID=$VM_ID" >> $GITHUB_ENV
+        env:
+          GITHUB_ACCESS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: build VM image
         run: |
-          brew install wget qemu cdrtools ansible tart
+          pkgx install qemu.org ansible.com
+          export PATH=/home/linuxbrew/.linuxbrew/bin:$PATH
+          type brew > /dev/null || /bin/bash -c "$(pkgx curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          brew install cdrtools
           wget -O "$QCOW2_IMAGE" "$URL" || true
           qemu-img convert -p -f qcow2 -O raw "$QCOW2_IMAGE" "$RAW_IMAGE"
           echo "local-hostname: $VM_NAME" > cloud-init/meta-data
           cat "$USER_DATA_FIXTURE" > cloud-init/user-data
           mkisofs -output cloud-init.iso -volid cidata -joliet -rock cloud-init/
-          packer init .
-          tart create --linux "$VM_ID"
-          mv "$RAW_IMAGE" ~/.tart/vms/"$VM_ID"/disk.img
-          packer build -var vm_name="$VM_ID" .
-          tart get "$VM_ID"
+          ls -l
         env:
           VM_NAME: "ubuntu"
           VM_RELEASE: "22.04"
@@ -45,3 +43,4 @@ jobs:
           LATEST: latest
           QCOW2_IMAGE: image.qcow2
           RAW_IMAGE: image.raw
+          PACKER_GITHUB_API_TOKEN: ${{ secrets.GITHUB_TOKEN }}
